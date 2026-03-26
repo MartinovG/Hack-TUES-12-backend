@@ -51,7 +51,7 @@ export class VirtualMachinesController {
       minCpu: minCpu ? Number(minCpu) : undefined,
       minRam: minRam ? Number(minRam) : undefined,
       minStorage: minStorage ? Number(minStorage) : undefined,
-      hasGpu: hasGpu === true || hasGpu === 'true',
+      hasGpu: hasGpu === true || String(hasGpu) === 'true',
       status,
     });
   }

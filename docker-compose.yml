@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: vm-sharing-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vm_sharing
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vm-sharing-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vm-sharing-backend
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: vm_sharing
+      JWT_SECRET: your_super_secret_jwt_key_change_in_production_12345
+      JWT_EXPIRES_IN: 24h
+      PORT: 3000
+      NODE_ENV: production
+      API_URL: http://localhost:3000
+      CORS_ORIGIN: "http://10.203.10.136:5173"
+      FRONTEND_URL: "http://10.203.10.136:5173"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - vm-sharing-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  vm-sharing-network:
+    driver: bridge

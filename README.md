@@ -30,6 +30,53 @@ A NestJS backend for a VM resource sharing platform where users can provide thei
 
 ## Installation
 
+### Option 1: Docker (Recommended)
+
+The easiest way to run the application is using Docker:
+
+1. Clone the repository:
+
+```bash
+git clone <repository-url>
+cd Hack-TUES-12-backend
+```
+
+2. Start with Docker Compose (Production):
+
+```bash
+docker-compose up -d
+```
+
+Or for development with hot reload:
+
+```bash
+docker-compose -f docker-compose.dev.yml up
+```
+
+The API will be available at `http://localhost:3000`
+Swagger documentation at `http://localhost:3000/api`
+
+**Docker Commands:**
+
+```bash
+# Start containers
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+
+# Stop containers
+docker-compose down
+
+# Rebuild after code changes
+docker-compose up --build
+
+# Remove volumes (deletes database data)
+docker-compose down -v
+```
+
+### Option 2: Local Installation
+
 1. Clone the repository:
 
 ```bash
