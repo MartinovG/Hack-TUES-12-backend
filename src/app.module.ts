@@ -13,34 +13,46 @@ import { VirtualMachine } from './entities/virtual-machine.entity';
 import { VMRental } from './entities/vm-rental.entity';
 import { VMJob } from './entities/vm-job.entity';
 import { VMUsageMetric } from './entities/vm-usage-metric.entity';
+import { DownloadModule } from './download/download.module';
+
+const typeOrmImports = process.env.SKIP_DB === '1'
+  ? []
+  : [
+      TypeOrmModule.forRootAsync({
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          type: 'postgres',
+          host: configService.get('DB_HOST'),
+          port: configService.get('DB_PORT'),
+          username: configService.get('DB_USERNAME'),
+          password: configService.get('DB_PASSWORD'),
+          database: configService.get('DB_DATABASE'),
+          entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric],
+          synchronize: configService.get('NODE_ENV') === 'development',
+          logging: configService.get('NODE_ENV') === 'development',
+        }),
+        inject: [ConfigService],
+      }),
+    ];
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('DB_HOST'),
-        port: configService.get('DB_PORT'),
-        username: configService.get('DB_USERNAME'),
-        password: configService.get('DB_PASSWORD'),
-        database: configService.get('DB_DATABASE'),
-        entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric],
-        synchronize: configService.get('NODE_ENV') === 'development',
-        logging: configService.get('NODE_ENV') === 'development',
-      }),
-      inject: [ConfigService],
-    }),
-    AuthModule,
-    UsersModule,
-    VirtualMachinesModule,
-    RentalsModule,
-    JobsModule,
-    MetricsModule,
-    CalculatorModule,
+    ...typeOrmImports,
+    ...(process.env.SKIP_DB === '1'
+      ? []
+      : [
+          AuthModule,
+          UsersModule,
+          VirtualMachinesModule,
+          RentalsModule,
+          JobsModule,
+          MetricsModule,
+          CalculatorModule,
+        ]),
+    DownloadModule,
   ],
 })
 export class AppModule {}
