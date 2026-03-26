@@ -20,5 +20,5 @@ export default new DataSource({
   database: configService.get('DB_DATABASE'),
   entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric],
   migrations: ['src/migrations/*.ts'],
-  synchronize: false,
+  synchronize: true,
 });
