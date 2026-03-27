@@ -28,6 +28,8 @@ RUN npm ci --only=production
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+# Copy assets into dist so runtime can serve downloads
+COPY assets ./dist/assets
 
 # Expose port
 EXPOSE 3000

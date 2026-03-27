@@ -8,7 +8,11 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    origin: [
+      'http://localhost:5173',
+      'http://10.203.10.136:5173',
+      process.env.CORS_ORIGIN,
+    ].filter(Boolean),
     credentials: true,
   });
 

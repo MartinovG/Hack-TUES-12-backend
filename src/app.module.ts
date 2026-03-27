@@ -13,7 +13,10 @@ import { VirtualMachine } from './entities/virtual-machine.entity';
 import { VMRental } from './entities/vm-rental.entity';
 import { VMJob } from './entities/vm-job.entity';
 import { VMUsageMetric } from './entities/vm-usage-metric.entity';
+import { PhysicalComputer } from './entities/physical-computer.entity';
 import { DownloadModule } from './download/download.module';
+import { ComputersModule } from './computers/computers.module';
+import { WebSocketModule } from './websocket/websocket.module';
 
 const typeOrmImports = process.env.SKIP_DB === '1'
   ? []
@@ -27,7 +30,7 @@ const typeOrmImports = process.env.SKIP_DB === '1'
           username: configService.get('DB_USERNAME'),
           password: configService.get('DB_PASSWORD'),
           database: configService.get('DB_DATABASE'),
-          entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric],
+          entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric, PhysicalComputer],
           synchronize: configService.get('NODE_ENV') === 'development',
           logging: configService.get('NODE_ENV') === 'development',
         }),
@@ -51,6 +54,8 @@ const typeOrmImports = process.env.SKIP_DB === '1'
           JobsModule,
           MetricsModule,
           CalculatorModule,
+          ComputersModule,
+          WebSocketModule,
         ]),
     DownloadModule,
   ],

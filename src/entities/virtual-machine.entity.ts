@@ -10,13 +10,16 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { VMRental } from './vm-rental.entity';
+import { PhysicalComputer } from './physical-computer.entity';
 
 export enum VMStatus {
+  CONFIGURING = 'configuring',
   AVAILABLE = 'available',
-  RUNNING = 'running',
-  SETUP = 'setup',
-  MAINTENANCE = 'maintenance',
   OFFLINE = 'offline',
+  BUILDING = 'building',
+  RUNNING = 'running',
+  SHUTTING_DOWN = 'shutting_down',
+  FAILED = 'failed',
 }
 
 @Entity('virtual_machines')
@@ -64,7 +67,7 @@ export class VirtualMachine {
   @Column({
     type: 'enum',
     enum: VMStatus,
-    default: VMStatus.OFFLINE,
+    default: VMStatus.CONFIGURING,
   })
   status: VMStatus;
 
@@ -73,6 +76,22 @@ export class VirtualMachine {
 
   @Column({ name: 'last_heartbeat', type: 'timestamp', nullable: true })
   lastHeartbeat: Date;
+
+  @Column({ name: 'physical_computer_id', nullable: true })
+  physicalComputerId: string;
+
+  @ManyToOne(() => PhysicalComputer, (computer) => computer.virtualMachines)
+  @JoinColumn({ name: 'physical_computer_id' })
+  physicalComputer: PhysicalComputer;
+
+  @Column({ name: 'vm_ip_address', nullable: true })
+  vmIpAddress: string;
+
+  @Column({ name: 'vm_ssh_port', type: 'int', nullable: true, default: 22 })
+  vmSshPort: number;
+
+  @Column({ name: 'vm_ssh_username', nullable: true })
+  vmSshUsername: string;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
