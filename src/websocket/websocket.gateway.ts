@@ -16,6 +16,7 @@ import { VirtualMachinesService } from '../virtual-machines/virtual-machines.ser
 import { ComputerStatus } from '../entities/physical-computer.entity';
 import { VMStatus } from '../entities/virtual-machine.entity';
 import { VMRental, RentalState } from '../entities/vm-rental.entity';
+import { VMJob, JobStatus } from '../entities/vm-job.entity';
 import {
   ClientConnectedEvent,
   VMProvisioningStartedEvent,
@@ -59,6 +60,8 @@ export class ComputerWebSocketGateway
     private vmService: VirtualMachinesService,
     @InjectRepository(VMRental)
     private rentalRepository: Repository<VMRental>,
+    @InjectRepository(VMJob)
+    private jobRepository: Repository<VMJob>,
   ) {}
 
   private getErrorMessage(error: unknown): string {
@@ -227,21 +230,45 @@ export class ComputerWebSocketGateway
   @SubscribeMessage('execution_started')
   async handleExecutionStarted(@MessageBody() data: ExecutionStartedEvent) {
     this.logger.log(`Execution started: Job ${data.job_id}`);
-    // Job status update handled by JobsService
+    const job = await this.jobRepository.findOne({ where: { id: data.job_id } });
+
+    if (!job) {
+      this.logger.warn(`Job ${data.job_id} was not found while marking it as running`);
+      return;
+    }
+
+    job.status = JobStatus.RUNNING;
+    await this.jobRepository.save(job);
   }
 
   @SubscribeMessage('execution_completed')
   async handleExecutionCompleted(@MessageBody() data: ExecutionCompletedEvent) {
     this.logger.log(`Execution completed: Job ${data.job_id}`);
-    // Emit event for JobsService to handle
-    this.server.emit('job_completed', data);
+    const job = await this.jobRepository.findOne({ where: { id: data.job_id } });
+
+    if (!job) {
+      this.logger.warn(`Job ${data.job_id} was not found while marking it as completed`);
+      return;
+    }
+
+    job.status = JobStatus.COMPLETED;
+    job.result = [data.stdout, data.stderr].filter(Boolean).join('\n').trim();
+    await this.jobRepository.save(job);
   }
 
   @SubscribeMessage('execution_failed')
   async handleExecutionFailed(@MessageBody() data: ExecutionFailedEvent) {
     this.logger.error(`Execution failed: Job ${data.job_id} - ${data.error}`);
-    // Emit event for JobsService to handle
-    this.server.emit('job_failed', data);
+    const job = await this.jobRepository.findOne({ where: { id: data.job_id } });
+
+    if (!job) {
+      this.logger.warn(`Job ${data.job_id} was not found while marking it as failed`);
+      return;
+    }
+
+    job.status = JobStatus.FAILED;
+    job.result = [data.error, data.stderr].filter(Boolean).join('\n').trim();
+    await this.jobRepository.save(job);
   }
 
   // ============ VM LIFECYCLE ============
