@@ -85,7 +85,8 @@ export class VirtualMachinesService {
   async updateStatus(id: string, status: VMStatus, userId: string): Promise<VirtualMachine> {
     const vm = await this.findOne(id);
 
-    if (vm.providerId !== userId) {
+    // Allow system updates (userId === 'system') or owner updates
+    if (userId !== 'system' && vm.providerId !== userId) {
       throw new ForbiddenException('You can only update your own VMs');
     }
 
@@ -93,6 +94,23 @@ export class VirtualMachinesService {
     vm.lastHeartbeat = new Date();
 
     return await this.vmRepository.save(vm);
+  }
+
+  async setPhysicalComputer(vmId: string, computerId: string | null): Promise<void> {
+    await this.vmRepository.update(vmId, { physicalComputerId: computerId });
+  }
+
+  async updateVMInfo(vmId: string, info: {
+    ipAddress?: string;
+    sshPort?: number;
+    sshUsername?: string;
+  }): Promise<void> {
+    const updateData: any = {};
+    if (info.ipAddress) updateData.vmIpAddress = info.ipAddress;
+    if (info.sshPort) updateData.vmSshPort = info.sshPort;
+    if (info.sshUsername) updateData.vmSshUsername = info.sshUsername;
+    
+    await this.vmRepository.update(vmId, updateData);
   }
 
   async updateHeartbeat(vmId: string): Promise<void> {

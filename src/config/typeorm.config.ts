@@ -6,6 +6,7 @@ import { VirtualMachine } from '../entities/virtual-machine.entity';
 import { VMRental } from '../entities/vm-rental.entity';
 import { VMJob } from '../entities/vm-job.entity';
 import { VMUsageMetric } from '../entities/vm-usage-metric.entity';
+import { PhysicalComputer } from '../entities/physical-computer.entity';
 
 config();
 
@@ -18,7 +19,7 @@ export default new DataSource({
   username: configService.get('DB_USERNAME'),
   password: configService.get('DB_PASSWORD'),
   database: configService.get('DB_DATABASE'),
-  entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric],
+  entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric, PhysicalComputer],
   migrations: ['src/migrations/*.ts'],
   synchronize: true,
 });

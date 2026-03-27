@@ -12,10 +12,9 @@ import { User } from './user.entity';
 import { VMJob } from './vm-job.entity';
 import { VMUsageMetric } from './vm-usage-metric.entity';
 
-export enum RentalStatus {
+export enum RentalState {
   ACTIVE = 'active',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
+  NOT_ACTIVE = 'not_active',
 }
 
 export enum PaymentStatus {
@@ -53,11 +52,12 @@ export class VMRental {
   totalCost: number;
 
   @Column({
+    name: 'rental_state',
     type: 'enum',
-    enum: RentalStatus,
-    default: RentalStatus.ACTIVE,
+    enum: RentalState,
+    default: RentalState.NOT_ACTIVE,
   })
-  status: RentalStatus;
+  rentalState: RentalState;
 
   @Column({
     name: 'payment_status',

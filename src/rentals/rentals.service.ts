@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { VMRental, RentalStatus, PaymentStatus } from '../entities/vm-rental.entity';
+import { VMRental, RentalState, PaymentStatus } from '../entities/vm-rental.entity';
 import { VirtualMachinesService } from '../virtual-machines/virtual-machines.service';
 import { VMStatus } from '../entities/virtual-machine.entity';
 
@@ -16,8 +16,8 @@ export class RentalsService {
   async create(vmId: string, receiverId: string): Promise<VMRental> {
     const vm = await this.vmService.findOne(vmId);
 
-    if (vm.status !== VMStatus.AVAILABLE) {
-      throw new BadRequestException('VM is not available for rental');
+    if (vm.status === VMStatus.RUNNING) {
+      throw new BadRequestException('VM is already running');
     }
 
     if (vm.providerId === receiverId) {
@@ -28,7 +28,7 @@ export class RentalsService {
       vmId,
       receiverId,
       startTime: new Date(),
-      status: RentalStatus.ACTIVE,
+      rentalState: RentalState.ACTIVE,
       paymentStatus: PaymentStatus.PENDING,
     });
 
@@ -70,12 +70,12 @@ export class RentalsService {
       throw new BadRequestException('You can only end your own rentals');
     }
 
-    if (rental.status !== RentalStatus.ACTIVE) {
+    if (rental.rentalState !== RentalState.ACTIVE) {
       throw new BadRequestException('Rental is not active');
     }
 
     rental.endTime = new Date();
-    rental.status = RentalStatus.COMPLETED;
+    rental.rentalState = RentalState.NOT_ACTIVE;
 
     // Calculate total cost
     const hours = (rental.endTime.getTime() - rental.startTime.getTime()) / (1000 * 60 * 60);
@@ -83,8 +83,8 @@ export class RentalsService {
 
     const savedRental = await this.rentalRepository.save(rental);
 
-    // Update VM status back to available
-    await this.vmService.updateStatus(rental.vmId, VMStatus.AVAILABLE, rental.vm.providerId);
+    // Update VM status back to offline
+    await this.vmService.updateStatus(rental.vmId, VMStatus.OFFLINE, rental.vm.providerId);
 
     return savedRental;
   }
