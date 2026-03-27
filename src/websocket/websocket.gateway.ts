@@ -295,6 +295,10 @@ export class ComputerWebSocketGateway
     const clientData = this.connectedClients.get(client.id);
     if (clientData) {
       await this.computersService.updateHeartbeat(clientData.computerId);
+      await this.vmService.updateHeartbeat(clientData.vmId);
+      this.logger.debug(
+        `Heartbeat received from computer ${clientData.hostname} for VM ${clientData.vmId}`,
+      );
     }
   }
 
