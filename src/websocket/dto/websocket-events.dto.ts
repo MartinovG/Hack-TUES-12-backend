@@ -145,6 +145,7 @@ export interface DestroyVMEvent {
 export interface ConnectionAcknowledgedEvent {
   action: 'connection_acknowledged';
   computer_id: string;
+  vm_id: string;
   status: string;
   message: string;
 }

@@ -13,9 +13,13 @@ import { VMRental } from './vm-rental.entity';
 import { PhysicalComputer } from './physical-computer.entity';
 
 export enum VMStatus {
+  CONFIGURING = 'configuring',
+  AVAILABLE = 'available',
   OFFLINE = 'offline',
   BUILDING = 'building',
   RUNNING = 'running',
+  SHUTTING_DOWN = 'shutting_down',
+  FAILED = 'failed',
 }
 
 @Entity('virtual_machines')
@@ -63,7 +67,7 @@ export class VirtualMachine {
   @Column({
     type: 'enum',
     enum: VMStatus,
-    default: VMStatus.OFFLINE,
+    default: VMStatus.CONFIGURING,
   })
   status: VMStatus;
 

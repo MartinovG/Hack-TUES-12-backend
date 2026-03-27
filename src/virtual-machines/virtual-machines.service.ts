@@ -19,7 +19,7 @@ export class VirtualMachinesService {
       ...createVMDto,
       providerId,
       connectionToken,
-      status: VMStatus.OFFLINE,
+      status: VMStatus.CONFIGURING,
     });
 
     return await this.vmRepository.save(vm);

@@ -9,10 +9,13 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ComputersService } from '../computers/computers.service';
 import { VirtualMachinesService } from '../virtual-machines/virtual-machines.service';
 import { ComputerStatus } from '../entities/physical-computer.entity';
 import { VMStatus } from '../entities/virtual-machine.entity';
+import { VMRental, RentalState } from '../entities/vm-rental.entity';
 import {
   ClientConnectedEvent,
   VMProvisioningStartedEvent,
@@ -48,13 +51,19 @@ export class ComputerWebSocketGateway
   private readonly logger = new Logger(ComputerWebSocketGateway.name);
   private connectedClients: Map<
     string,
-    { socket: Socket; computerId: string; hostname: string }
+    { socket: Socket; computerId: string; hostname: string; vmId: string }
   > = new Map();
 
   constructor(
     private computersService: ComputersService,
     private vmService: VirtualMachinesService,
+    @InjectRepository(VMRental)
+    private rentalRepository: Repository<VMRental>,
   ) {}
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client attempting to connect: ${client.id}`);
@@ -67,6 +76,18 @@ export class ComputerWebSocketGateway
     for (const [socketId, data] of this.connectedClients.entries()) {
       if (socketId === client.id) {
         await this.computersService.setConnected(data.computerId, false);
+        const vm = await this.vmService.findOne(data.vmId);
+        const nextStatus =
+          vm.status === VMStatus.RUNNING || vm.status === VMStatus.BUILDING
+            ? VMStatus.OFFLINE
+            : vm.status === VMStatus.SHUTTING_DOWN
+              ? VMStatus.OFFLINE
+              : vm.status;
+        await this.vmService.updateStatus(data.vmId, nextStatus, 'system');
+        await this.closeActiveRentalForVm(
+          data.vmId,
+          'Provider machine disconnected before the rental completed',
+        );
         this.connectedClients.delete(socketId);
         this.logger.log(`Computer ${data.hostname} marked as disconnected`);
         break;
@@ -84,6 +105,8 @@ export class ComputerWebSocketGateway
     this.logger.log(`Computer connecting: ${data.hostname}`);
 
     try {
+      const vm = await this.vmService.findByConnectionToken(data.connection_token);
+
       // Register or update computer
       const computer = await this.computersService.register({
         hostname: data.hostname,
@@ -91,25 +114,39 @@ export class ComputerWebSocketGateway
         capabilities: data.capabilities,
       });
 
+      await this.vmService.setPhysicalComputer(vm.id, computer.id);
+      await this.computersService.setCurrentVM(computer.id, vm.id);
+
+      if ([VMStatus.CONFIGURING, VMStatus.OFFLINE, VMStatus.FAILED].includes(vm.status)) {
+        await this.vmService.updateStatus(vm.id, VMStatus.AVAILABLE, 'system');
+      }
+
       // Store in connected clients map
       this.connectedClients.set(client.id, {
         socket: client,
         computerId: computer.id,
         hostname: computer.hostname,
+        vmId: vm.id,
       });
 
       // Send acknowledgment
       const response: ConnectionAcknowledgedEvent = {
         action: 'connection_acknowledged',
         computer_id: computer.id,
-        status: 'available',
-        message: 'Successfully registered and connected',
+        vm_id: vm.id,
+        status:
+          vm.status === VMStatus.RUNNING || vm.status === VMStatus.BUILDING
+            ? vm.status
+            : 'available',
+        message: 'Provider machine registered. This VM can now be used.',
       };
 
       client.emit('connection_acknowledged', response);
       this.logger.log(`Computer ${data.hostname} registered with ID: ${computer.id}`);
     } catch (error) {
-      this.logger.error(`Failed to register computer: ${error.message}`);
+      this.logger.error(
+        `Failed to register computer: ${this.getErrorMessage(error)}`,
+      );
       client.emit('error', { message: 'Failed to register computer' });
     }
   }
@@ -125,7 +162,9 @@ export class ComputerWebSocketGateway
     try {
       await this.vmService.updateStatus(data.vm_id, VMStatus.BUILDING, 'system');
     } catch (error) {
-      this.logger.error(`Failed to update VM status: ${error.message}`);
+      this.logger.error(
+        `Failed to update VM status: ${this.getErrorMessage(error)}`,
+      );
     }
   }
 
@@ -135,10 +174,15 @@ export class ComputerWebSocketGateway
 
     try {
       const vm = await this.vmService.findOne(data.vm_id);
-      
-      // Update VM with SSH info
+
+      await this.vmService.updateVMInfo(data.vm_id, {
+        ipAddress: data.vm_info.ip_address,
+        sshPort: data.vm_info.ssh_port,
+        sshUsername: data.vm_info.ssh_username,
+      });
+
       await this.vmService.updateStatus(data.vm_id, VMStatus.RUNNING, 'system');
-      
+
       // Update computer status
       if (vm.physicalComputerId) {
         await this.computersService.updateStatus(
@@ -149,7 +193,7 @@ export class ComputerWebSocketGateway
 
       this.logger.log(`VM ${data.vm_id} is now running at ${data.vm_info.ip_address}`);
     } catch (error) {
-      this.logger.error(`Failed to update VM info: ${error.message}`);
+      this.logger.error(`Failed to update VM info: ${this.getErrorMessage(error)}`);
     }
   }
 
@@ -158,8 +202,10 @@ export class ComputerWebSocketGateway
     this.logger.error(`VM provisioning failed: ${data.vm_id} - ${data.error}`);
 
     try {
+      this.logger.warn(`Marking VM ${data.vm_id} as failed after provisioning error`);
       const vm = await this.vmService.findOne(data.vm_id);
-      await this.vmService.updateStatus(data.vm_id, VMStatus.OFFLINE, 'system');
+      await this.vmService.updateStatus(data.vm_id, VMStatus.FAILED, 'system');
+      await this.closeActiveRentalForVm(data.vm_id, data.error);
 
       // Free up the computer
       if (vm.physicalComputerId) {
@@ -170,7 +216,9 @@ export class ComputerWebSocketGateway
         await this.computersService.setCurrentVM(vm.physicalComputerId, null);
       }
     } catch (error) {
-      this.logger.error(`Failed to handle provisioning failure: ${error.message}`);
+      this.logger.error(
+        `Failed to handle provisioning failure: ${this.getErrorMessage(error)}`,
+      );
     }
   }
 
@@ -201,7 +249,17 @@ export class ComputerWebSocketGateway
   @SubscribeMessage('vm_stopped')
   async handleVMStopped(@MessageBody() data: VMStoppedEvent) {
     this.logger.log(`VM stopped: ${data.vm_id}`);
-    // Status update handled externally
+    try {
+      await this.vmService.updateStatus(data.vm_id, VMStatus.OFFLINE, 'system');
+      const vm = await this.vmService.findOne(data.vm_id);
+
+      if (vm.physicalComputerId) {
+        await this.computersService.updateStatus(vm.physicalComputerId, ComputerStatus.AVAILABLE);
+        await this.computersService.setCurrentVM(vm.physicalComputerId, null);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to handle VM stop: ${this.getErrorMessage(error)}`);
+    }
   }
 
   @SubscribeMessage('vm_destroyed')
@@ -221,7 +279,9 @@ export class ComputerWebSocketGateway
         await this.computersService.setCurrentVM(vm.physicalComputerId, null);
       }
     } catch (error) {
-      this.logger.error(`Failed to handle VM destruction: ${error.message}`);
+      this.logger.error(
+        `Failed to handle VM destruction: ${this.getErrorMessage(error)}`,
+      );
     }
   }
 
@@ -308,5 +368,24 @@ export class ComputerWebSocketGateway
       }
     }
     return false;
+  }
+
+  private async closeActiveRentalForVm(vmId: string, debugReason: string): Promise<void> {
+    const rental = await this.rentalRepository.findOne({
+      where: { vmId, rentalState: RentalState.ACTIVE },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!rental) {
+      return;
+    }
+
+    this.logger.warn(
+      `Closing active rental ${rental.id} for VM ${vmId}. Reason: ${debugReason}`,
+    );
+    rental.endTime = new Date();
+    rental.rentalState = RentalState.NOT_ACTIVE;
+    rental.totalCost = 0;
+    await this.rentalRepository.save(rental);
   }
 }
