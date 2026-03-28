@@ -12,7 +12,7 @@ import uuid
 import psutil
 import socketio
 
-BACKEND_URL = os.getenv("HIVE_BACKEND_URL", "").strip()
+BACKEND_URL = os.getenv("HIVE_BACKEND_URL", os.getenv("API_URL", "http://178.104.63.93:3000")).strip()
 SOCKET_PATH = os.getenv("HIVE_SOCKET_PATH", "/computer-socket")
 CONNECTION_TOKEN = os.getenv("HIVE_CONNECTION_TOKEN", "").strip()
 HEARTBEAT_INTERVAL = int(os.getenv("HIVE_HEARTBEAT_INTERVAL", "30"))
@@ -35,7 +35,7 @@ def log(level: str, message: str):
     print(f"[{timestamp}] [{level}] {message}")
 
 
-async def run_command_in_vm(command: str) -> dict:
+def run_command_in_vm(command: str) -> dict:
     """Run a single command inside the Vagrant VM and return a structured result."""
     try:
         result = subprocess.run(
@@ -179,17 +179,13 @@ def resolve_connection_token():
         print("[!] A setup key is required to register this provider machine.")
 
 
-def resolve_backend_url():
+def require_backend_url():
     if BACKEND_URL:
         return BACKEND_URL.rstrip("/")
 
-    print("[*] Enter the backend URL for your hosted Share A Comp API.")
-
-    while True:
-        provided = input("Backend URL: ").strip()
-        if provided:
-            return provided.rstrip("/")
-        print("[!] A backend URL is required, for example: https://api.your-domain.com")
+    raise RuntimeError(
+        "HIVE_BACKEND_URL is not configured and no default backend URL is available."
+    )
 
 
 async def heartbeat_loop():
@@ -649,7 +645,7 @@ async def connect_to_backend():
 if __name__ == "__main__":
     try:
         CONNECTION_TOKEN = resolve_connection_token()
-        BACKEND_URL = resolve_backend_url()
+        BACKEND_URL = require_backend_url()
         check_and_install_dependencies()
         log("INFO", "Starting remote Hive Agent lifecycle debug copy...")
         log("INFO", f"Backend URL: {BACKEND_URL}")
