@@ -12,7 +12,10 @@ import uuid
 import psutil
 import socketio
 
-BACKEND_URL = os.getenv("HIVE_BACKEND_URL", os.getenv("API_URL", "http://178.104.63.93:3000")).strip()
+BACKEND_URL = os.getenv(
+    "HIVE_BACKEND_URL",
+    os.getenv("API_URL", "https://dev.hack-tues-12.innovatebulgaria.com"),
+).strip()
 SOCKET_PATH = os.getenv("HIVE_SOCKET_PATH", "/computer-socket")
 CONNECTION_TOKEN = os.getenv("HIVE_CONNECTION_TOKEN", "").strip()
 HEARTBEAT_INTERVAL = int(os.getenv("HIVE_HEARTBEAT_INTERVAL", "30"))

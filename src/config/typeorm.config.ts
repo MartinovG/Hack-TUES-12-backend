@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, DataSourceOptions } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { config } from 'dotenv';
 import { User } from '../entities/user.entity';
@@ -11,15 +11,30 @@ import { PhysicalComputer } from '../entities/physical-computer.entity';
 config();
 
 const configService = new ConfigService();
+const databaseUrl = configService.get<string>('DATABASE_URL');
+const useSsl = databaseUrl || configService.get<string>('DB_SSL', 'true') === 'true';
 
-export default new DataSource({
+const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
-  host: configService.get('DB_HOST'),
-  port: configService.get('DB_PORT'),
-  username: configService.get('DB_USERNAME'),
-  password: configService.get('DB_PASSWORD'),
-  database: configService.get('DB_DATABASE'),
+  ...(databaseUrl
+    ? { url: databaseUrl }
+    : {
+        host: configService.get<string>('DB_HOST'),
+        port: Number(configService.get<string>('DB_PORT')),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_DATABASE'),
+      }),
+  ...(useSsl
+    ? {
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }
+    : {}),
   entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric, PhysicalComputer],
   migrations: ['src/migrations/*.ts'],
   synchronize: true,
-});
+};
+
+export default new DataSource(dataSourceOptions);

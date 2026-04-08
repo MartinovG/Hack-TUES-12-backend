@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { VirtualMachinesModule } from './virtual-machines/virtual-machines.module';
@@ -17,23 +18,44 @@ import { PhysicalComputer } from './entities/physical-computer.entity';
 import { DownloadModule } from './download/download.module';
 import { ComputersModule } from './computers/computers.module';
 import { WebSocketModule } from './websocket/websocket.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 const typeOrmImports = process.env.SKIP_DB === '1'
   ? []
   : [
       TypeOrmModule.forRootAsync({
         imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          type: 'postgres',
-          host: configService.get('DB_HOST'),
-          port: configService.get('DB_PORT'),
-          username: configService.get('DB_USERNAME'),
-          password: configService.get('DB_PASSWORD'),
-          database: configService.get('DB_DATABASE'),
-          entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric, PhysicalComputer],
-          synchronize: configService.get('NODE_ENV') === 'development',
-          logging: configService.get('NODE_ENV') === 'development',
-        }),
+        useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
+          const databaseUrl = configService.get<string>('DATABASE_URL');
+          const useSsl = databaseUrl || configService.get<string>('DB_SSL', 'true') === 'true';
+          const shouldSynchronize =
+            configService.get<string>('DB_SYNCHRONIZE', 'false') === 'true' ||
+            configService.get('NODE_ENV') === 'development';
+
+          return {
+            type: 'postgres',
+            ...(databaseUrl
+              ? { url: databaseUrl }
+              : {
+                  host: configService.get<string>('DB_HOST'),
+                  port: Number(configService.get<string>('DB_PORT')),
+                  username: configService.get<string>('DB_USERNAME'),
+                  password: configService.get<string>('DB_PASSWORD'),
+                  database: configService.get<string>('DB_DATABASE'),
+                }),
+            ...(useSsl
+              ? {
+                  ssl: {
+                    rejectUnauthorized: false,
+                  },
+                }
+              : {}),
+            entities: [User, VirtualMachine, VMRental, VMJob, VMUsageMetric, PhysicalComputer],
+            synchronize: shouldSynchronize,
+            logging: shouldSynchronize,
+          };
+        },
         inject: [ConfigService],
       }),
     ];
@@ -59,5 +81,7 @@ const typeOrmImports = process.env.SKIP_DB === '1'
         ]),
     DownloadModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
