@@ -5,14 +5,21 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configuredCorsOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const corsOrigins = Array.from(
+    new Set([
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      ...configuredCorsOrigins,
+    ]),
+  );
 
   // Enable CORS
   app.enableCors({
-    origin: [
-      'http://localhost:5173',
-      'http://10.203.10.136:5173',
-      process.env.CORS_ORIGIN,
-    ].filter(Boolean),
+    origin: corsOrigins,
     credentials: true,
   });
 

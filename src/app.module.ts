@@ -28,10 +28,15 @@ const typeOrmImports = process.env.SKIP_DB === '1'
         imports: [ConfigModule],
         useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
           const databaseUrl = configService.get<string>('DATABASE_URL');
-          const useSsl = databaseUrl || configService.get<string>('DB_SSL', 'true') === 'true';
+          const explicitDbSsl = configService.get<string>('DB_SSL');
+          const nodeEnv = configService.get<string>('NODE_ENV');
+          const useSsl =
+            explicitDbSsl !== undefined
+              ? explicitDbSsl === 'true'
+              : Boolean(databaseUrl) || nodeEnv === 'production';
           const shouldSynchronize =
             configService.get<string>('DB_SYNCHRONIZE', 'false') === 'true' ||
-            configService.get('NODE_ENV') === 'development';
+            nodeEnv === 'development';
 
           return {
             type: 'postgres',

@@ -277,8 +277,12 @@ export class ComputerWebSocketGateway
   async handleVMStopped(@MessageBody() data: VMStoppedEvent) {
     this.logger.log(`VM stopped: ${data.vm_id}`);
     try {
-      await this.vmService.updateStatus(data.vm_id, VMStatus.OFFLINE, 'system');
       const vm = await this.vmService.findOne(data.vm_id);
+      const nextVmStatus =
+        vm.physicalComputerId && this.isComputerConnected(vm.physicalComputerId)
+          ? VMStatus.AVAILABLE
+          : VMStatus.OFFLINE;
+      await this.vmService.updateStatus(data.vm_id, nextVmStatus, 'system');
 
       if (vm.physicalComputerId) {
         await this.computersService.updateStatus(vm.physicalComputerId, ComputerStatus.AVAILABLE);
@@ -295,7 +299,11 @@ export class ComputerWebSocketGateway
 
     try {
       const vm = await this.vmService.findOne(data.vm_id);
-      await this.vmService.updateStatus(data.vm_id, VMStatus.OFFLINE, 'system');
+      const nextVmStatus =
+        vm.physicalComputerId && this.isComputerConnected(vm.physicalComputerId)
+          ? VMStatus.AVAILABLE
+          : VMStatus.OFFLINE;
+      await this.vmService.updateStatus(data.vm_id, nextVmStatus, 'system');
 
       // Free up the computer
       if (vm.physicalComputerId) {
@@ -323,6 +331,7 @@ export class ComputerWebSocketGateway
     if (clientData) {
       await this.computersService.updateHeartbeat(clientData.computerId);
       await this.vmService.updateHeartbeat(clientData.vmId);
+      await this.reconcileReusableVmState(clientData.vmId, clientData.computerId);
       this.logger.debug(
         `Heartbeat received from computer ${clientData.hostname} for VM ${clientData.vmId}`,
       );
@@ -418,5 +427,25 @@ export class ComputerWebSocketGateway
     rental.rentalState = RentalState.NOT_ACTIVE;
     rental.totalCost = 0;
     await this.rentalRepository.save(rental);
+  }
+
+  private async reconcileReusableVmState(vmId: string, computerId: string): Promise<void> {
+    const vm = await this.vmService.findOne(vmId);
+    if (vm.status !== VMStatus.OFFLINE) {
+      return;
+    }
+
+    const activeRental = await this.rentalRepository.findOne({
+      where: { vmId, rentalState: RentalState.ACTIVE },
+      order: { createdAt: 'DESC' },
+    });
+    if (activeRental) {
+      return;
+    }
+
+    await this.computersService.updateStatus(computerId, ComputerStatus.AVAILABLE);
+    await this.computersService.setCurrentVM(computerId, null);
+    await this.vmService.updateStatus(vmId, VMStatus.AVAILABLE, 'system');
+    this.logger.log(`Recovered VM ${vmId} back to available after heartbeat reconciliation`);
   }
 }

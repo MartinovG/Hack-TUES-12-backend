@@ -1,24 +1,16 @@
-import { Controller, Get, Res, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Res, StreamableFile, Req } from '@nestjs/common';
 import type { Response } from 'express';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import archiver from 'archiver';
-import { PassThrough } from 'stream';
+import type { Request } from 'express';
+import { DownloadService } from './download.service';
 
 @Controller('download')
 export class DownloadController {
+  constructor(private readonly downloadService: DownloadService) {}
+
   @Get('python')
   getPython(@Res({ passthrough: true }) res: Response): StreamableFile {
-    // Prefer project assets in development to avoid stale dist; use dist in production
-    const distDir = join(__dirname, '../assets', 'scripts');
-    const srcDir = join(process.cwd(), 'assets', 'scripts');
-
-    const preferSrc = process.env.NODE_ENV !== 'production';
-    const primary = preferSrc ? srcDir : distDir;
-    const secondary = preferSrc ? distDir : srcDir;
-    const folderPath = existsSync(primary) ? primary : (existsSync(secondary) ? secondary : null);
-
-    if (!folderPath) {
+    const bundle = this.downloadService.buildRawScriptsArchive();
+    if (!bundle) {
       res.status(404);
       const buffer = Buffer.from('# scripts folder was not found on server\n', 'utf-8');
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -26,21 +18,65 @@ export class DownloadController {
       return new StreamableFile(buffer);
     }
 
-    // Stream the entire folder as a ZIP
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename="scripts.zip"');
+    res.setHeader('Content-Disposition', `attachment; filename="${bundle.filename}"`);
+    return bundle.file;
+  }
 
-    const pass = new PassThrough();
-    const archive = archiver('zip', { zlib: { level: 9 } });
-
-    archive.on('error', (err) => {
-      pass.destroy(err);
+  @Get('connector-template')
+  getConnectorTemplate(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): StreamableFile {
+    const bundle = this.downloadService.buildConnectorBundle({
+      backendUrl: this.resolveBackendUrl(req),
     });
+    if (!bundle) {
+      res.status(404);
+      const buffer = Buffer.from('# connector bundle was not found on server\n', 'utf-8');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="provider-connector.zip"');
+      return new StreamableFile(buffer);
+    }
 
-    archive.pipe(pass);
-    archive.directory(folderPath, false);
-    void archive.finalize();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${bundle.filename}"`);
+    return bundle.file;
+  }
 
-    return new StreamableFile(pass);
+  @Get('desktop-apps')
+  getDesktopApps() {
+    return {
+      artifacts: this.downloadService.listDesktopAppArtifacts(),
+    };
+  }
+
+  @Get('desktop-apps/:filename')
+  getDesktopAppArtifact(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): StreamableFile {
+    const bundle = this.downloadService.openDesktopAppArtifact(String(req.params.filename || ''));
+    if (!bundle) {
+      res.status(404);
+      const buffer = Buffer.from('# desktop app artifact was not found on server\n', 'utf-8');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="desktop-app-not-found.txt"');
+      return new StreamableFile(buffer);
+    }
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${bundle.filename}"`);
+    return bundle.file;
+  }
+
+  private resolveBackendUrl(req: Request) {
+    const configured = process.env.HIVE_PUBLIC_BACKEND_URL?.trim();
+    if (configured) {
+      return configured.replace(/\/$/, '');
+    }
+
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+    return `${proto}://${req.get('host')}`;
   }
 }

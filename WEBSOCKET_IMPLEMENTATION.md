@@ -79,7 +79,7 @@ This implementation adds WebSocket-based communication between the NestJS backen
   "action": "provision_vm",
   "vm_id": "uuid",
   "rental_id": "uuid",
-  "os_choice": "ubuntu/jammy64",
+  "os_choice": "generic/ubuntu2204",
   "specs": {
     "memory": 4096,
     "cpus": 2

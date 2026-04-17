@@ -47,10 +47,10 @@ export class VirtualMachine {
   cpuFrequencyGhz: number;
 
   @Column({ name: 'gpu_model', nullable: true })
-  gpuModel: string;
+  gpuModel: string | null;
 
   @Column({ name: 'gpu_vram_gb', type: 'int', nullable: true })
-  gpuVramGb: number;
+  gpuVramGb: number | null;
 
   @Column({ name: 'ram_gb', type: 'int' })
   ramGb: number;
@@ -75,23 +75,23 @@ export class VirtualMachine {
   pricePerHour: number;
 
   @Column({ name: 'last_heartbeat', type: 'timestamp', nullable: true })
-  lastHeartbeat: Date;
+  lastHeartbeat: Date | null;
 
   @Column({ name: 'physical_computer_id', nullable: true })
-  physicalComputerId: string;
+  physicalComputerId: string | null;
 
   @ManyToOne(() => PhysicalComputer, (computer) => computer.virtualMachines)
   @JoinColumn({ name: 'physical_computer_id' })
-  physicalComputer: PhysicalComputer;
+  physicalComputer: PhysicalComputer | null;
 
   @Column({ name: 'vm_ip_address', nullable: true })
-  vmIpAddress: string;
+  vmIpAddress: string | null;
 
   @Column({ name: 'vm_ssh_port', type: 'int', nullable: true, default: 22 })
   vmSshPort: number;
 
   @Column({ name: 'vm_ssh_username', nullable: true })
-  vmSshUsername: string;
+  vmSshUsername: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

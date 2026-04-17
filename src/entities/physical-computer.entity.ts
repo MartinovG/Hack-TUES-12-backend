@@ -53,10 +53,10 @@ export class PhysicalComputer {
   hostOs: string;
 
   @Column({ name: 'current_vm_id', nullable: true })
-  currentVmId: string;
+  currentVmId: string | null;
 
   @Column({ name: 'last_heartbeat', type: 'timestamp', nullable: true })
-  lastHeartbeat: Date;
+  lastHeartbeat: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

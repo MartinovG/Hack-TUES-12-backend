@@ -1,0 +1,8 @@
+{
+  "backendUrl": "https://dev.hack-tues-12.innovatebulgaria.com",
+  "socketPath": "/computer-socket",
+  "connectionToken": "paste-your-setup-key-here",
+  "heartbeatInterval": 30,
+  "reconnectDelay": 5,
+  "jsonLogs": false
+}
